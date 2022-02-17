@@ -118,29 +118,24 @@ The Google Store dataset summarised several information about the  Applications 
 
 29. Version
 
-The dataset was downloaded from Kaggle website (https://www.kaggle.com/geothomas/playstore-dataset/download) in a zip file. After extracting the zip file, a csv data file (Playstore_final.csv) is obtained. 
 
-In the CSV file, the columns are separated with , charcter , and the text quoted with " charcter. The csv data file loaded into R studio using read.csv2 function. 
+The full dataset with size of 200M could be downloaded from Kaggle website (https://www.kaggle.com/geothomas/playstore-dataset/download). For this project, due to file size limitation on GITHUB, I trimmed the dataset to with size of 60M.
+
+Zipfile of the dataset is downloaded from GITHUB and unzipped. In the CSV file, the columns are separated with , charcter , and the text quoted with " charcter. The csv data file loaded into R studio using read.csv2 function. 
 
 ```{r store load, warning = FALSE,echo=TRUE}
+#download dataset from GITHUB and load dataset into R
+dl <- tempfile()
+download.file("https://github.com/annalee0107/PLAYSTORE/raw/main/GOOGLESTORE.zip", dl)
 
-loc <- "D:/R/GOOGLE STORE/Playstore_final.csv/Playstore_final.csv"
-if(!exists("d1")) d0<-read.csv2(loc ,header=TRUE, sep=",",quote='"',  encoding="UTF-8")
+loc <- unzip(dl, "GOOGLESTORE.csv")
+d0<-read.csv2(loc ,header=TRUE, sep=",",quote='"',  encoding="UTF-8")
 
 ```
-The columns "Rating" , "Reviews", "Rating.Count", "Price" should be numerics. NA occurs upon conversion of character to numerics
-due to erroreous data lines, the NA lines in dataset are removed from dataset: 
-```{r store check, warning = FALSE,echo=TRUE}
+The dataset summarized mean Rating per applications,the rating total of every application is calculated 
+```{r storeRatingTotal, warning = FALSE,echo=TRUE}
  
- d0a <- d0[ !is.na(as.numeric(d0$Rating) ),]
-   d0b <- d0a[ !is.na(as.numeric(d0a$Reviews) )  ,]
-    d0c <- d0b[!is.na(as.numeric(d0b$Rating.Count) ),] 
-    d0d <- d0c[!is.na(as.numeric(d0c$Price) ),] 
-    
-# the dataset summarized mean Rating per applications
-# the rating total of every application is calculated 
- d0e<- d0d %>% mutate(ratingtotal = as.numeric(Rating) * as.numeric(Rating.Count))
-   d0f <- d0e[!is.na(as.numeric(d0e$ratingtotal) ),]
+ d0a<- d0 %>% mutate(ratingtotal = as.numeric(Rating) * as.numeric(Rating.Count))
 ```
 
 
@@ -148,8 +143,8 @@ Relevant columns (App.Id, Category,Rating, Rating.Count, ratingtotal, Developer.
 ```{r store select, warning = FALSE,echo=TRUE}
  
 
-d0g<-d0f %>% select (App.Id,Category, Content.Rating, Rating, Rating.Count,ratingtotal, Developer.Id, Developer)
-d1 <- d0g %>% mutate (Rating = as.numeric(Rating),Rating.Count= as.numeric(Rating.Count),ratingtotal = as.numeric(ratingtotal) )
+d0b<-d0a %>% select (App.Id,Category, Content.Rating, Rating, Rating.Count,ratingtotal, Developer.Id, Developer)
+d1 <- d0b %>% mutate (Rating = as.numeric(Rating),Rating.Count= as.numeric(Rating.Count),ratingtotal = as.numeric(ratingtotal) )
 
 #Preview d1 dataset
 head(d1)
@@ -313,13 +308,13 @@ rmse_results%>% knitr::kable()
 ```{r Category-effect,warning = FALSE, echo=TRUE}
 
 Category_avgs <- store %>% 
-     group_by(Category) %>%  summarize(b_i = mean(as.numeric(Rating) - store_mean))
+     group_by(Category) %>%  summarize(b_cat = mean(as.numeric(Rating) - store_mean))
 
-Category_avgs %>% qplot(b_i, geom ="histogram", bins = 10, data = ., color = I("black"))
+Category_avgs %>% qplot(b_cat, geom ="histogram", bins = 10, data = ., color = I("black"))
 
 predicted_ratings <- store_mean + validation %>% 
      left_join(Category_avgs, by='Category') %>%
-     .$b_i
+     .$b_cat
 
 model_1_rmse <- RMSE(predicted_ratings, as.numeric(validation$Rating))
 rmse_results2 <- bind_rows(rmse_results,
@@ -337,13 +332,13 @@ rmse_results2 %>% knitr::kable()
 Developer.Id_avgs <- store %>% select (Category, Developer.Id, Rating ) %>%
      left_join(Category_avgs, by='Category') %>%
      group_by(Developer.Id) %>%
-     summarize(b_u = mean(as.numeric(Rating) - store_mean - b_i))
-Developer.Id_avgs %>% qplot(b_u, geom ="histogram", bins = 10, data = ., color = I("black"))
+     summarize(b_dev = mean(as.numeric(Rating) - store_mean - b_cat))
+Developer.Id_avgs %>% qplot(b_dev, geom ="histogram", bins = 10, data = ., color = I("black"))
 
 predicted_ratings <- validation %>% select (Category, Developer.Id) %>%
      left_join(Category_avgs, by='Category') %>%
      left_join(Developer.Id_avgs, by='Developer.Id') %>%
-     mutate(pred = store_mean + b_i + b_u) %>%
+     mutate(pred = store_mean + b_cat + b_dev) %>%
      .$pred
 
 model_2_rmse <- RMSE(predicted_ratings, as.numeric(validation$Rating) )
@@ -369,14 +364,14 @@ Content.Rating_avgs <- store %>% select (Category, Developer.Id, Content.Rating,
      left_join(Category_avgs, by='Category') %>%
       left_join(Developer.Id_avgs, by='Developer.Id') %>%
      group_by(Content.Rating) %>%
-     summarize(b_m = mean(as.numeric(Rating) - store_mean - b_i - b_u))
+     summarize(b_m = mean(as.numeric(Rating) - store_mean - b_cat - b_dev))
 Content.Rating_avgs %>% qplot(b_m, geom ="histogram", bins = 10, data = ., color = I("black"))
 
 predicted_ratings <- validation %>% select (Category,  Developer.Id, Content.Rating) %>%
      left_join(Category_avgs, by='Category') %>%
      left_join(Developer.Id_avgs, by='Developer.Id') %>%
       left_join(Content.Rating_avgs, by='Content.Rating') %>%
-     mutate(pred = store_mean + b_i + b_u +b_m) %>%
+     mutate(pred = store_mean + b_cat + b_dev +b_m) %>%
      .$pred
 model_3_rmse <- RMSE(predicted_ratings, as.numeric(validation$Rating) )
 rmse_results4 <- bind_rows(rmse_results3,
@@ -398,9 +393,9 @@ lambda <- 3
 mu <- mean(as.numeric(store$Rating))
 Category_reg_avgs <- store %>% 
     group_by(Category) %>% 
-    summarize(b_i = sum(as.numeric(Rating) - mu)/(n()+lambda), n_i = n()) 
-data_frame(original = Category_avgs$b_i, 
-           regularlized = Category_reg_avgs$b_i, 
+    summarize(b_cat = sum(as.numeric(Rating) - mu)/(n()+lambda), n_i = n()) 
+data_frame(original = Category_avgs$b_cat, 
+           regularlized = Category_reg_avgs$b_cat, 
            n = Category_reg_avgs$n_i) %>%
     ggplot(aes(original, regularlized, size=sqrt(n))) + 
     geom_point(shape=1, alpha=0.5)
@@ -408,20 +403,20 @@ data_frame(original = Category_avgs$b_i,
 store %>%
      dplyr::count(Category) %>% 
      left_join(Category_reg_avgs) %>%
-     arrange(desc(b_i)) %>% 
-     select( b_i, n) %>% 
+     arrange(desc(b_cat)) %>% 
+     select( b_cat, n) %>% 
      slice(1:10) %>% 
      knitr::kable()
 validation %>%
      dplyr::count(Category) %>% 
      left_join(Category_reg_avgs) %>%
-     arrange(b_i) %>% 
-     select( b_i, n) %>% 
+     arrange(b_cat) %>% 
+     select( b_cat, n) %>% 
      slice(1:10) %>% 
      knitr::kable()
 predicted_Ratings <- validation %>% 
      left_join(Category_reg_avgs, by='Category') %>%
-     mutate(pred = mu + b_i) %>%
+     mutate(pred = mu + b_cat) %>%
      .$pred
 model_5_rmse <- RMSE(predicted_Ratings, as.numeric(validation$Rating) )
 rmse_results5 <- bind_rows(rmse_results,
@@ -448,8 +443,8 @@ just_the_sum <- store %>%
 rmses5a <- sapply(lambdas, function(l){
     predicted_Ratings <- validation %>% 
         left_join(just_the_sum, by='Category') %>% 
-        mutate(b_i = s/(n_i+l)) %>%
-        mutate(pred = mu + b_i) %>%
+        mutate(b_cat = s/(n_i+l)) %>%
+        mutate(pred = mu + b_cat) %>%
         .$pred
     return(RMSE(predicted_Ratings, as.numeric(validation$Rating)  ))
 })
@@ -458,8 +453,8 @@ l1 <- lambdas[which.min(rmses5a)]
 l1
 rmses5 <- validation %>% 
         left_join(just_the_sum, by='Category') %>% 
-        mutate(b_i = s/(n_i+l1)) %>%
-        mutate(pred = mu + b_i) %>%
+        mutate(b_cat = s/(n_i+l1)) %>%
+        mutate(pred = mu + b_cat) %>%
         .$pred
 model_5_rmse <- RMSE(rmses5, as.numeric(validation$Rating)  )
 rmse_results5 <- bind_rows(rmse_results,
@@ -478,20 +473,20 @@ rmse_results5 %>% knitr::kable()
 
 lambdas <- seq(0, 10, 0.25)
 
- Category_avgs2e <- store %>% select(Category) %>%  left_join(just_the_sum, by='Category') %>%     mutate(b_i = s/(n_i+l1)) %>%
-       select (Category , b_i)
-  Category_avgs2v <- validation %>% select(Category) %>%  left_join(just_the_sum, by='Category') %>%     mutate(b_i = s/(n_i+l1)) %>%
-       select (Category , b_i)
+ Category_avgs2e <- store %>% select(Category) %>%  left_join(just_the_sum, by='Category') %>%     mutate(b_cat = s/(n_i+l1)) %>%
+       select (Category , b_cat)
+  Category_avgs2v <- validation %>% select(Category) %>%  left_join(just_the_sum, by='Category') %>%     mutate(b_cat = s/(n_i+l1)) %>%
+       select (Category , b_cat)
 
-u1 <- store %>% select ( Developer.Id, Rating) %>% cbind (Category_avgs2e$b_i) %>% set_names ("Developer.Id","Rating","b_i") %>% group_by(Developer.Id) %>%      summarize(s = sum( as.numeric(Rating) - mu - b_i ), n_i = n()) %>% select(Developer.Id,s,n_i)
+u1 <- store %>% select ( Developer.Id, Rating) %>% cbind (Category_avgs2e$b_cat) %>% set_names ("Developer.Id","Rating","b_cat") %>% group_by(Developer.Id) %>%      summarize(s = sum( as.numeric(Rating) - mu - b_cat ), n_i = n()) %>% select(Developer.Id,s,n_i)
 
 
 rmses6a <- sapply(lambdas, function(l){
     predicted_Ratings <- validation %>% select ( Developer.Id)  %>% 
-      cbind (rmses5)%>%   set_names ("Developer.Id","mu_b_i")%>%
+      cbind (rmses5)%>%   set_names ("Developer.Id","mu_b_cat")%>%
       left_join(u1, by='Developer.Id') %>% 
-        mutate(b_u = s/(n_i+l)) %>%
-        mutate(pred = mu_b_i +b_u) %>%
+        mutate(b_dev = s/(n_i+l)) %>%
+        mutate(pred = mu_b_cat +b_dev) %>%
         .$pred
     return(RMSE(predicted_Ratings,  as.numeric(validation$Rating)   ))
 })
@@ -500,10 +495,10 @@ l2<- lambdas[which.min(rmses6a)]
 l2
 
 rmses6 <- validation %>% select ( Developer.Id)  %>% 
-      cbind (rmses5)%>%   set_names ("Developer.Id","mu_b_i")%>%
+      cbind (rmses5)%>%   set_names ("Developer.Id","mu_b_cat")%>%
       left_join(u1, by='Developer.Id') %>% 
-        mutate(b_u = s/(n_i+l2)) %>%
-        mutate(pred = mu_b_i +b_u) %>%
+        mutate(b_dev = s/(n_i+l2)) %>%
+        mutate(pred = mu_b_cat +b_dev) %>%
         .$pred
 model_6_rmse <- RMSE( rmses6 ,  as.numeric(validation$Rating) )
 rmse_results6 <- bind_rows(rmse_results5,
@@ -521,19 +516,19 @@ rmse_results6 %>% knitr::kable()
 
 lambdas <- seq(0, 10, 0.25)
 
- Developer.Id_avgs2 <- store %>% select(Developer.Id) %>%  left_join(u1, by='Developer.Id') %>%     mutate(b_u = s/(n_i+l2)) %>%  select (Developer.Id , b_u)
+ Developer.Id_avgs2 <- store %>% select(Developer.Id) %>%  left_join(u1, by='Developer.Id') %>%     mutate(b_dev = s/(n_i+l2)) %>%  select (Developer.Id , b_dev)
 
  rm(u1)
 
-g1 <- store %>% select ( Content.Rating, Rating) %>% cbind (Category_avgs2e$b_i,Developer.Id_avgs2$b_u) %>% set_names ("Content.Rating","Rating","b_i","b_u") %>% group_by(Content.Rating) %>%      summarize(s = sum( as.numeric(Rating) - mu - b_i - b_u ), n_i = n()) %>% select(Content.Rating,s,n_i)
+g1 <- store %>% select ( Content.Rating, Rating) %>% cbind (Category_avgs2e$b_cat,Developer.Id_avgs2$b_dev) %>% set_names ("Content.Rating","Rating","b_cat","b_dev") %>% group_by(Content.Rating) %>%      summarize(s = sum( as.numeric(Rating) - mu - b_cat - b_dev ), n_i = n()) %>% select(Content.Rating,s,n_i)
 
 
 rmses7a <- sapply(lambdas, function(l){
     predicted_Ratings <- validation %>% select ( Content.Rating)  %>% 
-      cbind (rmses5)%>%   set_names ("Content.Rating","mu_b_i_bu")%>%
+      cbind (rmses5)%>%   set_names ("Content.Rating","mu_b_cat_bu")%>%
       left_join(g1, by='Content.Rating') %>% 
-        mutate(b_g = s/(n_i+l)) %>%
-        mutate(pred = mu_b_i_bu +b_g) %>%
+        mutate(b_CR = s/(n_i+l)) %>%
+        mutate(pred = mu_b_cat_bu +b_CR) %>%
         .$pred
     return(RMSE(predicted_Ratings, as.numeric(validation$Rating)  ))
 })
@@ -542,10 +537,10 @@ l3<- lambdas[which.min(rmses7a)]
 l3
 
 rmses7 <- validation %>% select (Content.Rating)  %>% 
-      cbind (rmses6)%>%   set_names ("Content.Rating","mu_b_i_bu")%>%
+      cbind (rmses6)%>%   set_names ("Content.Rating","mu_b_cat_bu")%>%
       left_join(g1, by='Content.Rating') %>% 
-        mutate(b_g = s/(n_i+l3)) %>%
-        mutate(pred = mu_b_i_bu +b_g) %>%
+        mutate(b_CR = s/(n_i+l3)) %>%
+        mutate(pred = mu_b_cat_bu +b_CR) %>%
         .$pred
 
 model_7_rmse <- RMSE( rmses7 , as.numeric(validation$Rating)  )
@@ -559,7 +554,7 @@ rmse_results7 %>% knitr::kable()
 
 Even though there are many attributes to an applications in the GOOGLE PLAYSTORE dataset, as the dataset already summarised Mean Rating and Rating Count by application, most columns with unique values and TRUE/FALSE values are not useful in prediction (eg. App Name, App Id, Free, In App purchases, Editor Choice). 
 
-The Category, DeveloperId and Content.Rating Model is able to reduce the RMSE to 0.515, while the Regularized Category, DeveloperId and Content.Rating Model is able to reduce the RMSE to less than 0.5, which is moderately low for the Rating maximum as 5. 
+The Category, DeveloperId and Content.Rating Model is able to reduce the RMSE to 0.5397, while the Regularized Category, DeveloperId and Content.Rating Model is able to reduce the RMSE to 0.5119175, which is moderately low for the Rating maximum as 5. 
 
 ```{r conclusion, warning = FALSE,echo=TRUE}
 
