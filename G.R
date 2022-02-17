@@ -14,22 +14,22 @@ library(lubridate)
 library(ggplot2)
 library(formatR)
 
+#download dataset from GITHUB and load dataset into R
+dl <- tempfile()
+download.file("https://github.com/annalee0107/PLAYSTORE/raw/main/GOOGLESTORE.zip", dl)
 
-loc <- "D:/R/GOOGLE STORE/Playstore_final.csv/Playstore_final.csv"
-if(!exists("d1")) d0<-read.csv2(loc ,header=TRUE, sep=",",quote='"',  encoding="UTF-8")
+loc <- unzip(dl, "GOOGLESTORE.csv")
+d0<-read.csv2(loc ,header=TRUE, sep=",",quote='"',  encoding="UTF-8")
 
- d0a <- d0[ !is.na(as.numeric(d0$Rating) ),]
-   d0b <- d0a[ !is.na(as.numeric(d0a$Reviews) )  ,]
-    d0c <- d0b[!is.na(as.numeric(d0b$Rating.Count) ),] 
-    d0d <- d0c[!is.na(as.numeric(d0c$Price) ),] 
-    
-# the dataset summarized mean Rating per applications
-# the rating total of every application is calculated 
- d0e<- d0d %>% mutate(ratingtotal = as.numeric(Rating) * as.numeric(Rating.Count))
-   d0f <- d0e[!is.na(as.numeric(d0e$ratingtotal) ),]
 
-d0g<-d0f %>% select (App.Id,Category, Content.Rating, Rating, Rating.Count,ratingtotal, Developer.Id, Developer)
-d1 <- d0g %>% mutate (Rating = as.numeric(Rating),Rating.Count= as.numeric(Rating.Count),ratingtotal = as.numeric(ratingtotal) )
+#The dataset summarized mean Rating per applications,the rating total of every application is calculated 
+d0a<- d0 %>% mutate(ratingtotal = as.numeric(Rating) * as.numeric(Rating.Count))
+
+
+#Relevant columns (App.Id, Category,Rating, Rating.Count, ratingtotal, Developer.Id, Developer) are selected : 
+
+d0b<-d0a %>% select (App.Id,Category, Content.Rating, Rating, Rating.Count,ratingtotal, Developer.Id, Developer)
+d1 <- d0b %>% mutate (Rating = as.numeric(Rating),Rating.Count= as.numeric(Rating.Count),ratingtotal = as.numeric(ratingtotal) )
 
 #Preview d1 dataset
 head(d1)
